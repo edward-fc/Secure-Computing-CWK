@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -11,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.mindrot.jbcrypt.BCrypt;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -102,13 +104,35 @@ public class AppServlet extends HttpServlet {
     }
   }
 
-  private boolean authenticated(String username, String password) throws SQLException {
-    String query = String.format(AUTH_QUERY, username, password);
-    try (Statement stmt = database.createStatement()) {
-      ResultSet results = stmt.executeQuery(query);
-      return results.next();
+  private boolean authenticated(String username, String password) {
+
+    if (username == null || password == null) return false;
+    if (username.isEmpty() || password.isEmpty()) return false;
+
+    try {
+        // Fetch only the hashed password for this username
+        String sql = "SELECT password FROM user WHERE username = ?";
+
+        PreparedStatement pstmt = database.prepareStatement(sql);
+        pstmt.setString(1, username);
+
+        ResultSet rs = pstmt.executeQuery();
+
+        // If no user with that username exists → authentication fails
+        if (!rs.next()) {
+            return false;
+        }
+
+        String storedHash = rs.getString("password");
+
+        return BCrypt.checkpw(password, storedHash);
+
+    } catch (SQLException e) {
+        e.printStackTrace();
+        return false;
     }
   }
+
 
   private List<Record> searchResults(String surname) throws SQLException {
     List<Record> records = new ArrayList<>();

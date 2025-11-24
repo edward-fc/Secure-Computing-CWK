@@ -28,8 +28,8 @@ import freemarker.template.TemplateExceptionHandler;
 public class AppServlet extends HttpServlet {
 
   private static final String CONNECTION_URL = "jdbc:sqlite:db.sqlite3";
-  private static final String AUTH_QUERY = "SELECT password FROM user WHERE username = ?";
-  private static final String SEARCH_QUERY = "SELECT * FROM patient WHERE surname = ?";
+  private static final String AUTH_QUERY = "SELECT id, password FROM user WHERE username = ?";
+  private static final String SEARCH_QUERY = "SELECT * FROM patient WHERE surname = ? AND gp_id = ?";
 
   private final Configuration fm = new Configuration(Configuration.VERSION_2_3_28);
   private Connection database;
@@ -85,10 +85,20 @@ public class AppServlet extends HttpServlet {
     String surname = request.getParameter("surname");
 
     try {
-      if (authenticated(username, password)) {
+      // authenticatedUser() now returns the user's doctor_id.
+      Integer doctorId = authenticated(username, password);
+      // if authentication succeeded, doctorId will be non-null
+      if (doctorId != null) {
+        // Enforce access control: refuse search if not logged in
+        if (surname == null || surname.isEmpty()) {
+            response.sendRedirect("/");
+            return;
+        }
         // Get search results and merge with template
         Map<String, Object> model = new HashMap<>();
-        model.put("records", searchResults(surname));
+        // pass the doctorId to searchResults to ensure only
+        // records belonging to that doctor are returned
+        model.put("records", searchResults(surname, doctorId));
         Template template = fm.getTemplate("details.html");
         template.process(model, response.getWriter());
       }
@@ -108,11 +118,11 @@ public class AppServlet extends HttpServlet {
   * Authenticates a user by verifying the supplied password
   * against the bcrypt hash stored in the database.
   */
-  private boolean authenticated(String username, String password) {
+  private Integer authenticated(String username, String password) {
 
     // input validation
-    if (username == null || password == null) return false;
-    if (username.isEmpty() || password.isEmpty()) return false;
+    if (username == null || password == null) return null;
+    if (username.isEmpty() || password.isEmpty()) return null;
 
     try {
         // use a PreparedStatement instead of building SQL using string
@@ -127,7 +137,7 @@ public class AppServlet extends HttpServlet {
 
         // if no user with that username exists then authentication fails
         if (!rs.next()) {
-            return false;
+            return null;
         }
         // retrieve the stored bcrypt hash
         String storedHash = rs.getString("password");
@@ -136,18 +146,24 @@ public class AppServlet extends HttpServlet {
         // BCrypt.checkpw(). This ensures passwords are never stored
         // or transmitted in plaintext and prevents attackers from
         // recovering GP credentials if the database is exposed.
-        return BCrypt.checkpw(password, storedHash);
+        if (!BCrypt.checkpw(password, storedHash)) {
+            return null;
+        }
+        // authentication succeeded, return the doctor's ID
+        // assuming the username is unique and corresponds to a single doctor
+        Integer doctorId = rs.getInt("id");
+        return doctorId;
 
     } catch (SQLException e) {
         e.printStackTrace();
-        return false;
+        return null;
     }
   }
 
   /**
   * Searches for patient records matching the given surname.
   */
-  private List<Record> searchResults(String surname) throws SQLException {
+  private List<Record> searchResults(String surname, int doctorId) throws SQLException {
     // The original version used string formatting to construct SQL
     // (String.format(SEARCH_QUERY, surname)), which allowed an
     // attacker to inject raw SQL into the WHERE clause.
@@ -159,6 +175,7 @@ public class AppServlet extends HttpServlet {
     try (PreparedStatement pstmt = database.prepareStatement(SEARCH_QUERY)) {
       // bind the user input securely to the SQL parameter
       pstmt.setString(1, surname);
+      pstmt.setInt(2, doctorId);
       ResultSet results = pstmt.executeQuery();
       // build the list of Record objects from the query results
       while (results.next()) {

@@ -28,7 +28,6 @@ import freemarker.template.TemplateExceptionHandler;
 public class AppServlet extends HttpServlet {
 
   private static final String CONNECTION_URL = "jdbc:sqlite:db.sqlite3";
-  private static final String AUTH_QUERY = "select * from user where username='%s' and password='%s'";
   private static final String SEARCH_QUERY = "select * from patient where surname='%s' collate nocase";
 
   private final Configuration fm = new Configuration(Configuration.VERSION_2_3_28);
@@ -144,12 +143,24 @@ public class AppServlet extends HttpServlet {
     }
   }
 
-
+  /**
+  * Searches for patient records matching the given surname.
+  */
   private List<Record> searchResults(String surname) throws SQLException {
+    // The original version used string formatting to construct SQL
+    // (String.format(SEARCH_QUERY, surname)), which allowed an
+    // attacker to inject raw SQL into the WHERE clause.
+    // Replacing the dynamic SQL string with a parameterised query
+    // prevents injected characters such as ' OR '1'='1 from altering
+    // the structure of the SQL command. PreparedStatement safely treats
+    // the surname as data rather than executable SQL.
     List<Record> records = new ArrayList<>();
-    String query = String.format(SEARCH_QUERY, surname);
-    try (Statement stmt = database.createStatement()) {
-      ResultSet results = stmt.executeQuery(query);
+    String query = "SELECT * FROM patient WHERE surname = ?";
+    try (PreparedStatement pstmt = database.prepareStatement(query)) {
+      // bind the user input securely to the SQL parameter
+      pstmt.setString(1, surname);
+      ResultSet results = pstmt.executeQuery();
+      // build the list of Record objects from the query results
       while (results.next()) {
         Record rec = new Record();
         rec.setSurname(results.getString(2));

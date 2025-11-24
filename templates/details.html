@@ -22,11 +22,12 @@
           </tr>
           <#list records as record>
           <tr>
-            <td>${record.surname}</td>
-            <td>${record.forename}</td>
-            <td>${record.dateOfBirth}</td>
-            <td>${record.doctorId}</td>
-            <td>${record.diagnosis}</td>
+            <!-- Fix for flaw 4: escape database values to prevent stored XSS with '?html' -->
+            <td>${record.surname?html}</td>
+            <td>${record.forename?html}</td>
+            <td>${record.dateOfBirth?html}</td>
+            <td>${record.doctorId?html}</td>
+            <td>${record.diagnosis?html}</td>
           </tr>
           </#list>
         </table>

@@ -28,7 +28,8 @@ import freemarker.template.TemplateExceptionHandler;
 public class AppServlet extends HttpServlet {
 
   private static final String CONNECTION_URL = "jdbc:sqlite:db.sqlite3";
-  private static final String SEARCH_QUERY = "select * from patient where surname='%s' collate nocase";
+  private static final String AUTH_QUERY = "SELECT password FROM user WHERE username = ?";
+  private static final String SEARCH_QUERY = "SELECT * FROM patient WHERE surname = ?";
 
   private final Configuration fm = new Configuration(Configuration.VERSION_2_3_28);
   private Connection database;
@@ -117,7 +118,7 @@ public class AppServlet extends HttpServlet {
         // use a PreparedStatement instead of building SQL using string
         // concatenation. This prevents attackers from injecting SQL
         // into the username field.
-        String sql = "SELECT password FROM user WHERE username = ?";
+        String sql = AUTH_QUERY;
 
         PreparedStatement pstmt = database.prepareStatement(sql);
         pstmt.setString(1, username);
@@ -155,8 +156,7 @@ public class AppServlet extends HttpServlet {
     // the structure of the SQL command. PreparedStatement safely treats
     // the surname as data rather than executable SQL.
     List<Record> records = new ArrayList<>();
-    String query = "SELECT * FROM patient WHERE surname = ?";
-    try (PreparedStatement pstmt = database.prepareStatement(query)) {
+    try (PreparedStatement pstmt = database.prepareStatement(SEARCH_QUERY)) {
       // bind the user input securely to the SQL parameter
       pstmt.setString(1, surname);
       ResultSet results = pstmt.executeQuery();

@@ -104,13 +104,20 @@ public class AppServlet extends HttpServlet {
     }
   }
 
+  /**
+  * Authenticates a user by verifying the supplied password
+  * against the bcrypt hash stored in the database.
+  */
   private boolean authenticated(String username, String password) {
 
+    // input validation
     if (username == null || password == null) return false;
     if (username.isEmpty() || password.isEmpty()) return false;
 
     try {
-        // Fetch only the hashed password for this username
+        // use a PreparedStatement instead of building SQL using string
+        // concatenation. This prevents attackers from injecting SQL
+        // into the username field.
         String sql = "SELECT password FROM user WHERE username = ?";
 
         PreparedStatement pstmt = database.prepareStatement(sql);
@@ -118,13 +125,17 @@ public class AppServlet extends HttpServlet {
 
         ResultSet rs = pstmt.executeQuery();
 
-        // If no user with that username exists → authentication fails
+        // if no user with that username exists then authentication fails
         if (!rs.next()) {
             return false;
         }
-
+        // retrieve the stored bcrypt hash
         String storedHash = rs.getString("password");
-
+        // instead of comparing plaintext passwords inside SQL, we now
+        // compare the user’s input to the bcrypt hash using
+        // BCrypt.checkpw(). This ensures passwords are never stored
+        // or transmitted in plaintext and prevents attackers from
+        // recovering GP credentials if the database is exposed.
         return BCrypt.checkpw(password, storedHash);
 
     } catch (SQLException e) {

@@ -1,6 +1,7 @@
 package comp3911.cwk2;
 
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.session.SessionHandler;
 import org.eclipse.jetty.servlet.ServletHandler;
 import org.eclipse.jetty.util.log.Log;
 import org.eclipse.jetty.util.log.StdErrLog;
@@ -13,7 +14,10 @@ public class AppServer {
     handler.addServletWithMapping(AppServlet.class, "/*");
 
     Server server = new Server(8080);
-    server.setHandler(handler);
+    SessionHandler sessions = new SessionHandler(); // enables HttpSession support
+    sessions.setHandler(handler);
+
+    server.setHandler(sessions);
 
     server.start();
     server.join();

@@ -88,16 +88,20 @@ public class AppServlet extends HttpServlet {
     try {
       HttpSession session = request.getSession(false);
       Integer doctorId = session != null ? (Integer) session.getAttribute("doctorId") : null;
+      boolean credentialsSupplied = username != null && !username.isEmpty() && password != null && !password.isEmpty();
 
-      // authenticate if no valid session is present
-      if (doctorId == null) {
+      // if credentials provided, authenticate and refresh session doctorId
+      if (credentialsSupplied) {
         doctorId = authenticated(username, password);
         if (doctorId != null) {
           session = request.getSession(true);
           session.setAttribute("doctorId", doctorId);
           session.setMaxInactiveInterval(15 * 60); // 15 minute idle timeout
+        } else if (session != null) {
+          session.invalidate();
         }
       }
+      // if no credentials provided, rely on existing session doctorId (may be null)
 
       // if authentication succeeded, doctorId will be non-null
       if (doctorId != null) {

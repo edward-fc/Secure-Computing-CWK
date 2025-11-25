@@ -18,6 +18,7 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 
 import freemarker.template.Configuration;
 import freemarker.template.Template;
@@ -85,8 +86,19 @@ public class AppServlet extends HttpServlet {
     String surname = request.getParameter("surname");
 
     try {
-      // authenticatedUser() now returns the user's doctor_id.
-      Integer doctorId = authenticated(username, password);
+      HttpSession session = request.getSession(false);
+      Integer doctorId = session != null ? (Integer) session.getAttribute("doctorId") : null;
+
+      // authenticate if no valid session is present
+      if (doctorId == null) {
+        doctorId = authenticated(username, password);
+        if (doctorId != null) {
+          session = request.getSession(true);
+          session.setAttribute("doctorId", doctorId);
+          session.setMaxInactiveInterval(15 * 60); // 15 minute idle timeout
+        }
+      }
+
       // if authentication succeeded, doctorId will be non-null
       if (doctorId != null) {
         // Enforce access control: refuse search if not logged in
@@ -110,6 +122,7 @@ public class AppServlet extends HttpServlet {
       response.setStatus(HttpServletResponse.SC_OK);
     }
     catch (Exception error) {
+      error.printStackTrace();
       response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
     }
   }
@@ -152,6 +165,7 @@ public class AppServlet extends HttpServlet {
         // authentication succeeded, return the doctor's ID
         // assuming the username is unique and corresponds to a single doctor
         Integer doctorId = rs.getInt("id");
+        System.err.println("DEBUG: auth success for user=" + username + ", doctorId=" + doctorId);
         return doctorId;
 
     } catch (SQLException e) {
